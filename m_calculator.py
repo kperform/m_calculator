@@ -205,12 +205,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Strategy Rules**")
     st.markdown("""
-- ✅ Stock must be > 200D MA
-- ✅ Near lowest price of last 10 days
-- ✅ Enter 2% below previous day close
-- ✅ Exit when RSI-2d crosses above 50
-- ⚠️ Max 8 open positions
-- ⚠️ Max 12.5% capital per trade
+
     """)
 
 
