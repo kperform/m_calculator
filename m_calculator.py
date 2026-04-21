@@ -1,6 +1,12 @@
 """
-M_cal — Trade Entry Calculator
+M_Cal — Trade Entry Calculator
 ================================
+Formulas extracted from M_Calculator.xlsx (UST_MRT2026 sheet)
+
+Strategy header (row 1):
+  MRT: Stock > 200D MA · lowest 10 days · enter 2% below prev day close
+       Russell 1000 stocks · exit RSI-2d above 50 · max 8 positions · 12.5% allocation
+
 Column H (Shares):  =ROUNDDOWN(1250 / Entry, 0)
   → Fixed capital of $1,250 per position, rounded DOWN to whole shares
 
@@ -19,7 +25,7 @@ Offline use:
 
 Usage:
   pip install streamlit yfinance
-  streamlit run M_cal.py
+  streamlit run M_Cal.py
 """
 
 import math
@@ -27,7 +33,7 @@ import streamlit as st
 
 # ── page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="M_cal",
+    page_title="M_Cal",
     page_icon="📈",
     layout="centered",
     initial_sidebar_state="collapsed",
@@ -176,19 +182,15 @@ for k, v in [("m_prev_close", 0.0), ("m_source", "empty"), ("m_msg", "")]:
 # ── header ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="m-header">
-  <h1>M_cal</h1>
-  <p class="sub">
-    Russell 1000 · Stock &gt; 200D MA · Lowest 10 days<br>
-    Enter 2% below prev close · Max 8 positions · $1,250/trade
-  </p>
+  <h1>M_Cal</h1>
   <span class="badge">M_CAL Strategy</span>
 </div>
 """, unsafe_allow_html=True)
 
 # ── sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### ⚙️ M_cal Settings")
-    st.markdown("**Formulas from M_calculator.xlsx:**")
+    st.markdown("### ⚙️ M_Cal Settings")
+    st.markdown("**Formulas from M_Calculator.xlsx:**")
     st.code(
         "Shares   = ROUNDDOWN(1250 / Entry, 0)\n"
         "CalPrice = Entry / 0.98  (= Prev Close)\n"
@@ -281,7 +283,7 @@ prev_close = prev_close_input
 # ════════════════════════════════════════════════════════════════
 if prev_close > 0 and entry_price > 0:
 
-    # M_cal formulas — exactly matching M_calculator.xlsx
+    # M_Cal formulas — exactly matching M_Calculator.xlsx
     ideal_entry  = prev_close * (1 - M_CAL_DISCOUNT)        # PrevClose × 0.98
     cal_price    = entry_price / (1 - M_CAL_DISCOUNT)        # col I: Entry ÷ 0.98
     shares       = math.floor(M_CAL_CAPITAL / entry_price)   # col H: ROUNDDOWN(1250÷Entry,0)
@@ -293,7 +295,7 @@ if prev_close > 0 and entry_price > 0:
     badge_cls    = "pill-live" if st.session_state.m_source == "live" else "pill-manual"
     badge_text   = "🟢 LIVE" if st.session_state.m_source == "live" else "🟡 MANUAL"
 
-    st.markdown('<div class="section-label">M_cal Results</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">M_Cal Results</div>', unsafe_allow_html=True)
 
     # ── symbol + shares ───────────────────────────────────────────────────────
     st.markdown(f"""
@@ -336,7 +338,7 @@ if prev_close > 0 and entry_price > 0:
         <div class="alert ok">
           ✅ Entry <strong>${entry_price:,.2f}</strong> is at or below the 2% target
           (${ideal_entry:,.2f}). You are <strong>${diff:,.2f} below</strong> the
-          M_cal threshold — valid entry.
+          M_Cal threshold — valid entry.
         </div>""", unsafe_allow_html=True)
     else:
         overshoot = entry_price - ideal_entry
@@ -344,7 +346,7 @@ if prev_close > 0 and entry_price > 0:
         <div class="alert warn">
           ⚠️ Entry <strong>${entry_price:,.2f}</strong> exceeds the 2% discount target
           of <strong>${ideal_entry:,.2f}</strong> by <strong>${overshoot:,.2f}</strong>.
-          Consider waiting for a pullback to the M_cal threshold.
+          Consider waiting for a pullback to the M_Cal threshold.
         </div>""", unsafe_allow_html=True)
 
     # ── breakdown cards ───────────────────────────────────────────────────────
@@ -367,26 +369,26 @@ if prev_close > 0 and entry_price > 0:
         ("Prev Day Close",           f"${prev_close:,.2f}",   "blue"),
         ("Ideal Entry (−2%)",        f"${ideal_entry:,.2f}",  "gold"),
         ("Your Entry",               f"${entry_price:,.2f}",  "green" if entry_ok else "orange"),
-        ("M_cal Cal Price (÷ 0.98)", f"${cal_price:,.2f}",    ""),
+        ("M_Cal Cal Price (÷ 0.98)", f"${cal_price:,.2f}",    ""),
         ("Discount to Prev Close",   f"{discount_pct:+.2f}%", "green" if discount_pct >= 2.0 else "orange"),
     ])
 
-    render_card("📐 Position Sizing (M_cal)", [
+    render_card("📐 Position Sizing (M_Cal)", [
         ("Shares  [ROUNDDOWN(1250 ÷ Entry, 0)]", f"{shares:,}",             "gold"),
         ("Capital Per Trade",                     f"${M_CAL_CAPITAL:,.0f}",  ""),
         ("Capital Deployed",                      f"${capital_used:,.2f}",   "blue"),
         ("Unused Capital",                        f"${M_CAL_CAPITAL - capital_used:,.2f}", ""),
     ])
 
-    with st.expander("📋 M_cal Formula Reference", expanded=False):
+    with st.expander("📋 M_Cal Formula Reference", expanded=False):
         st.markdown(f"""
-**Shares** (col H — M_calculator.xlsx)
+**Shares** (col H — M_Calculator.xlsx)
 ```
 Shares = ROUNDDOWN(1250 / Entry, 0)
        = ROUNDDOWN(1250 / {entry_price:.2f}, 0)
        = {shares}
 ```
-**Cal Price** (col I — M_calculator.xlsx)
+**Cal Price** (col I — M_Calculator.xlsx)
 ```
 CalPrice = Entry / 0.98
          = {entry_price:.2f} / 0.98
@@ -401,11 +403,11 @@ Ideal Entry = PrevClose × 0.98
 **Validation**
 ```
 Your Entry ({entry_price:.2f}) {'≤' if entry_ok else '>'} Ideal Entry ({ideal_entry:.2f})
-→ {'✅ VALID — within M_cal threshold' if entry_ok else '⚠️ ALERT — exceeds M_cal threshold'}
+→ {'✅ VALID — within M_Cal threshold' if entry_ok else '⚠️ ALERT — exceeds M_Cal threshold'}
 ```
-**Strategy (from M_calculator.xlsx row 1)**
+**Strategy (from M_Calculator.xlsx row 1)**
 ```
-M_CAL: Stock > 200D MA · Lowest 10 days
+MRT: Stock > 200D MA · Lowest 10 days
      Enter 2% below prev day close
      Exit: RSI-2d above 50
      Max 8 positions · 12.5% allocation · $1,250/trade
@@ -425,7 +427,7 @@ else:
 # ── footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div style="text-align:center;padding:24px 0 8px;font-size:0.65rem;color:#3d444d;">
-  M_cal · Formulas from M_calculator.xlsx (UST_M_CAL2026)<br>
+  M_Cal · Formulas from M_Calculator.xlsx (UST_MRT2026)<br>
   Shares = ROUNDDOWN(1250 / Entry, 0) · Target = PrevClose × 0.98<br>
   ✅ Works fully offline — all calculations are local
 </div>
