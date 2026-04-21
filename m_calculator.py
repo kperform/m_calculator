@@ -398,10 +398,7 @@ Your Entry ({entry_price:.2f}) {'≤' if entry_ok else '>'} Ideal Entry ({ideal_
 ```
 **Strategy (from M_Calculator.xlsx row 1)**
 ```
-MRT: Stock > 200D MA · Lowest 10 days
-     Enter 2% below prev day close
-     Exit: RSI-2d above 50
-     Max 8 positions · 12.5% allocation · $1,250/trade
+M_CAL: $1,250/trade
 ```
         """)
 
@@ -418,7 +415,7 @@ else:
 # ── footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div style="text-align:center;padding:24px 0 8px;font-size:0.65rem;color:#3d444d;">
-  M_Cal · Formulas from M_Calculator.xlsx (UST_MRT2026)<br>
+  M_Cal · Formulas from M_Calculator.xlsx (UST_M_CAL2026)<br>
   Shares = ROUNDDOWN(1250 / Entry, 0) · Target = PrevClose × 0.98<br>
   ✅ Works fully offline — all calculations are local
 </div>
