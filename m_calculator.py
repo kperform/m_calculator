@@ -206,19 +206,25 @@ with st.sidebar:
 
 
 # ════════════════════════════════════════════════════════════════
-# INPUTS
+# MODE TOGGLE
 # ════════════════════════════════════════════════════════════════
+st.markdown('<div class="section-label">Calculation Mode</div>', unsafe_allow_html=True)
+
+mode = st.radio(
+    "Choose what you want to enter:",
+    options=["Mode A — I know the Prev Close → give me Entry Price & Shares",
+             "Mode B — I know my Entry Price → give me Prev Close & Shares"],
+    index=0,
+    label_visibility="collapsed",
+)
+is_mode_a = mode.startswith("Mode A")
+
 st.markdown('<div class="section-label">Trade Inputs</div>', unsafe_allow_html=True)
 
-col_sym, col_entry = st.columns([1, 1])
-with col_sym:
-    symbol = st.text_input("Stock Symbol", value="", placeholder="e.g. AAPL", max_chars=10)
-with col_entry:
-    entry_price = st.number_input(
-        "Your Entry Price ($)", min_value=0.01, value=50.00, step=0.01, format="%.2f"
-    )
+# ── Symbol (always shown) ─────────────────────────────────────────────────────
+symbol = st.text_input("Stock Symbol", value="", placeholder="e.g. AAPL", max_chars=10)
 
-# ── fetch button (completely optional) ───────────────────────────────────────
+# ── fetch button (online only — always optional) ──────────────────────────────
 fetch_clicked = st.button("⬇  Auto-Fetch Prev Close  (skip this if offline)")
 
 if fetch_clicked:
@@ -234,182 +240,293 @@ if fetch_clicked:
             st.session_state.m_msg        = f"ok:✅ Fetched live prev close for {sym} — field pre-filled below."
         else:
             st.session_state.m_source = "manual"
-            st.session_state.m_msg    = f"warn:⚠️ Fetch failed: {err} — Enter the prev close manually below."
+            st.session_state.m_msg    = f"warn:⚠️ Fetch failed: {err} — Enter manually below."
 
-# show status message
 if st.session_state.m_msg:
     kind, text = st.session_state.m_msg.split(":", 1)
     st.markdown(f'<div class="alert {kind}">{text}</div>', unsafe_allow_html=True)
 
-# ── divider ───────────────────────────────────────────────────────────────────
 st.markdown('<div class="or-divider">or type manually — works offline</div>', unsafe_allow_html=True)
 
-# ── PREV CLOSE — always visible, always editable ─────────────────────────────
+# ── source pill ───────────────────────────────────────────────────────────────
 src = st.session_state.m_source
 pill_cls  = {"live": "pill-live", "manual": "pill-manual"}.get(src, "pill-empty")
 pill_text = {"live": "🟢 Live — auto-filled", "manual": "🟡 Manual"}.get(src, "⬜ Waiting")
-
 st.markdown(f'<span class="source-pill {pill_cls}">{pill_text}</span>', unsafe_allow_html=True)
 
-prev_close_input = st.number_input(
-    "Previous Day Close ($)",
-    min_value=0.0,
-    value=float(st.session_state.m_prev_close),
-    step=0.01,
-    format="%.2f",
-    help="Auto-filled by Fetch when online. Type here directly when offline.",
-)
-
-# sync manual edits back to session state
-if prev_close_input != st.session_state.m_prev_close:
-    st.session_state.m_prev_close = prev_close_input
-    if src != "live":
-        st.session_state.m_source = "manual"
-
-prev_close = prev_close_input
-
-
 # ════════════════════════════════════════════════════════════════
-# RESULTS — live as soon as both fields have values
+# MODE A — enter Prev Close → derive Entry + Shares
 # ════════════════════════════════════════════════════════════════
-if prev_close > 0 and entry_price > 0:
+if is_mode_a:
 
-    # M_Cal formulas — exactly matching M_Calculator.xlsx
-    ideal_entry  = prev_close * (1 - M_CAL_DISCOUNT)        # PrevClose × 0.98
-    cal_price    = entry_price / (1 - M_CAL_DISCOUNT)        # col I: Entry ÷ 0.98
-    shares       = math.floor(M_CAL_CAPITAL / entry_price)   # col H: ROUNDDOWN(1250÷Entry,0)
-    capital_used = shares * entry_price                       # col J: Shares × Entry
-    discount_pct = (prev_close - entry_price) / prev_close * 100
-    entry_ok     = entry_price <= ideal_entry * 1.001         # 0.1% tolerance
+    prev_close_input = st.number_input(
+        "Previous Day Close ($)",
+        min_value=0.0,
+        value=float(st.session_state.m_prev_close),
+        step=0.01,
+        format="%.2f",
+        help="Auto-filled by Fetch when online. Type here directly when offline.",
+    )
+    if prev_close_input != st.session_state.m_prev_close:
+        st.session_state.m_prev_close = prev_close_input
+        if src != "live":
+            st.session_state.m_source = "manual"
 
-    sym_display  = symbol.strip().upper() or "—"
-    badge_cls    = "pill-live" if st.session_state.m_source == "live" else "pill-manual"
-    badge_text   = "🟢 LIVE" if st.session_state.m_source == "live" else "🟡 MANUAL"
+    prev_close = prev_close_input
 
-    st.markdown('<div class="section-label">M_Cal Results</div>', unsafe_allow_html=True)
+    if prev_close > 0:
+        # derived values
+        ideal_entry  = prev_close * (1 - M_CAL_DISCOUNT)       # PrevClose × 0.98  ← entry target
+        shares       = math.floor(M_CAL_CAPITAL / ideal_entry)  # ROUNDDOWN(1250 / ideal_entry, 0)
+        capital_used = shares * ideal_entry
 
-    # ── symbol + shares ───────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <span style="font-size:1.5rem;font-weight:800;color:#f0c040;letter-spacing:.04em;">{sym_display}</span>
-        <span class="source-pill {badge_cls}">{badge_text}</span>
-      </div>
-      <div class="big-block">
-        <div class="lbl">Shares to Buy</div>
-        <div class="num green">{shares:,}</div>
-        <div class="unit">@ ${entry_price:,.2f} entry &nbsp;·&nbsp; ${capital_used:,.2f} deployed</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+        sym_display = symbol.strip().upper() or "—"
+        badge_cls   = "pill-live" if st.session_state.m_source == "live" else "pill-manual"
+        badge_text  = "🟢 LIVE" if st.session_state.m_source == "live" else "🟡 MANUAL"
 
-    # ── 3-stat row ────────────────────────────────────────────────────────────
-    disc_color = "green" if discount_pct >= 1.8 else "orange" if discount_pct >= 0 else "red"
-    st.markdown(f"""
-    <div class="grid3">
-      <div class="mini">
-        <div class="lbl">Prev Close</div>
-        <div class="val blue">${prev_close:,.2f}</div>
-      </div>
-      <div class="mini">
-        <div class="lbl">Ideal Entry</div>
-        <div class="val gold">${ideal_entry:,.2f}</div>
-      </div>
-      <div class="mini">
-        <div class="lbl">Discount</div>
-        <div class="val {disc_color}">{discount_pct:+.2f}%</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown('<div class="section-label">M_Cal Results</div>', unsafe_allow_html=True)
 
-    # ── entry alert ───────────────────────────────────────────────────────────
-    if entry_ok:
-        diff = ideal_entry - entry_price
+        st.markdown(f"""
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <span style="font-size:1.5rem;font-weight:800;color:#f0c040;letter-spacing:.04em;">{sym_display}</span>
+            <span class="source-pill {badge_cls}">{badge_text}</span>
+          </div>
+          <div class="big-block">
+            <div class="lbl">Shares to Buy</div>
+            <div class="num green">{shares:,}</div>
+            <div class="unit">@ ${ideal_entry:,.2f} entry &nbsp;·&nbsp; ${capital_used:,.2f} deployed</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="grid3">
+          <div class="mini">
+            <div class="lbl">Prev Close</div>
+            <div class="val blue">${prev_close:,.2f}</div>
+          </div>
+          <div class="mini">
+            <div class="lbl">Entry Target</div>
+            <div class="val gold">${ideal_entry:,.2f}</div>
+          </div>
+          <div class="mini">
+            <div class="lbl">Discount</div>
+            <div class="val green">−2.00%</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
         st.markdown(f"""
         <div class="alert ok">
-          ✅ Entry <strong>${entry_price:,.2f}</strong> is at or below the 2% target
-          (${ideal_entry:,.2f}). You are <strong>${diff:,.2f} below</strong> the
-          M_Cal threshold — valid entry.
-        </div>""", unsafe_allow_html=True)
-    else:
-        overshoot = entry_price - ideal_entry
-        st.markdown(f"""
-        <div class="alert warn">
-          ⚠️ Entry <strong>${entry_price:,.2f}</strong> exceeds the 2% discount target
-          of <strong>${ideal_entry:,.2f}</strong> by <strong>${overshoot:,.2f}</strong>.
-          Consider waiting for a pullback to the M_Cal threshold.
+          ✅ Enter at <strong>${ideal_entry:,.2f}</strong> or below
+          (2% discount from prev close of ${prev_close:,.2f}).
+          Buy <strong>{shares:,} shares</strong> — deploying ${capital_used:,.2f} of $1,250.
         </div>""", unsafe_allow_html=True)
 
-    # ── breakdown cards ───────────────────────────────────────────────────────
-    st.markdown('<div class="section-label">Full Breakdown</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Full Breakdown</div>', unsafe_allow_html=True)
 
-    def render_card(title, rows):
-        inner = "".join(
-            f'<div class="res-row">'
-            f'<span class="res-label">{lbl}</span>'
-            f'<span class="res-value {cls}">{val}</span>'
-            f'</div>'
-            for lbl, val, cls in rows
-        )
-        st.markdown(
-            f'<div class="card"><div class="card-title">{title}</div>{inner}</div>',
-            unsafe_allow_html=True,
-        )
+        def render_card(title, rows):
+            inner = "".join(
+                f'<div class="res-row">'
+                f'<span class="res-label">{lbl}</span>'
+                f'<span class="res-value {cls}">{val}</span>'
+                f'</div>'
+                for lbl, val, cls in rows
+            )
+            st.markdown(
+                f'<div class="card"><div class="card-title">{title}</div>{inner}</div>',
+                unsafe_allow_html=True,
+            )
 
-    render_card("💰 Price Levels", [
-        ("Prev Day Close",           f"${prev_close:,.2f}",   "blue"),
-        ("Ideal Entry (−2%)",        f"${ideal_entry:,.2f}",  "gold"),
-        ("Your Entry",               f"${entry_price:,.2f}",  "green" if entry_ok else "orange"),
-        ("M_Cal Cal Price (÷ 0.98)", f"${cal_price:,.2f}",    ""),
-        ("Discount to Prev Close",   f"{discount_pct:+.2f}%", "green" if discount_pct >= 2.0 else "orange"),
-    ])
+        render_card("💰 Price Levels", [
+            ("Prev Day Close",            f"${prev_close:,.2f}",   "blue"),
+            ("Ideal Entry Price (−2%)",   f"${ideal_entry:,.2f}",  "gold"),
+            ("M_Cal Cal Price (÷ 0.98)",  f"${prev_close:,.2f}",   ""),
+        ])
+        render_card("📐 Position Sizing (M_Cal)", [
+            ("Shares  [ROUNDDOWN(1250 ÷ Entry, 0)]", f"{shares:,}",            "gold"),
+            ("Capital Per Trade",                     f"${M_CAL_CAPITAL:,.0f}", ""),
+            ("Capital Deployed",                      f"${capital_used:,.2f}",  "blue"),
+            ("Unused Capital",                        f"${M_CAL_CAPITAL - capital_used:,.2f}", ""),
+        ])
 
-    render_card("📐 Position Sizing (M_Cal)", [
-        ("Shares  [ROUNDDOWN(1250 ÷ Entry, 0)]", f"{shares:,}",             "gold"),
-        ("Capital Per Trade",                     f"${M_CAL_CAPITAL:,.0f}",  ""),
-        ("Capital Deployed",                      f"${capital_used:,.2f}",   "blue"),
-        ("Unused Capital",                        f"${M_CAL_CAPITAL - capital_used:,.2f}", ""),
-    ])
-
-    with st.expander("📋 M_Cal Formula Reference", expanded=False):
-        st.markdown(f"""
-**Shares** (col H — M_Calculator.xlsx)
-```
-Shares = ROUNDDOWN(1250 / Entry, 0)
-       = ROUNDDOWN(1250 / {entry_price:.2f}, 0)
-       = {shares}
-```
-**Cal Price** (col I — M_Calculator.xlsx)
-```
-CalPrice = Entry / 0.98
-         = {entry_price:.2f} / 0.98
-         = {cal_price:.4f}   ← implied prev close
-```
-**Ideal Entry Target**
+        with st.expander("📋 M_Cal Formula Reference", expanded=False):
+            st.markdown(f"""
+**Mode A — Know Prev Close, find Entry & Shares**
 ```
 Ideal Entry = PrevClose × 0.98
             = {prev_close:.2f} × 0.98
             = {ideal_entry:.4f}
-```
-**Validation**
-```
-Your Entry ({entry_price:.2f}) {'≤' if entry_ok else '>'} Ideal Entry ({ideal_entry:.2f})
-→ {'✅ VALID — within M_Cal threshold' if entry_ok else '⚠️ ALERT — exceeds M_Cal threshold'}
-```
-**Strategy (from M_Calculator.xlsx row 1)**
-```
-M_CAL: $1,250/trade
-```
-        """)
 
+Shares = ROUNDDOWN(1250 / Ideal Entry, 0)
+       = ROUNDDOWN(1250 / {ideal_entry:.2f}, 0)
+       = {shares}
+```
+            """)
+
+    else:
+        st.markdown("""
+        <div class="alert info">
+          <strong>Mode A:</strong> Enter the previous day's close price above
+          (or tap Fetch if online). M_Cal will calculate your ideal entry price
+          and share count automatically.
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════════
+# MODE B — enter Entry Price → derive Prev Close + Shares
+# ════════════════════════════════════════════════════════════════
 else:
-    st.markdown("""
-    <div class="alert info">
-      <strong>Online?</strong> Enter a symbol + entry price and tap Fetch to auto-fill prev close.<br><br>
-      <strong>Offline?</strong> Skip Fetch entirely — type the prev close directly into the
-      field above. Results appear instantly. No internet needed.
-    </div>
-    """, unsafe_allow_html=True)
+
+    entry_price = st.number_input(
+        "Your Entry Price ($)",
+        min_value=0.01,
+        value=50.00,
+        step=0.01,
+        format="%.2f",
+        help="Type the price you plan to enter at. M_Cal will back-calculate the implied prev close.",
+    )
+
+    if entry_price > 0:
+        # derived values
+        implied_prev  = entry_price / (1 - M_CAL_DISCOUNT)      # Entry / 0.98 ← col I
+        shares        = math.floor(M_CAL_CAPITAL / entry_price)  # ROUNDDOWN(1250/entry,0)
+        capital_used  = shares * entry_price
+
+        # if a prev close was also fetched, validate entry against it
+        fetched_prev  = st.session_state.m_prev_close
+        has_fetched   = fetched_prev > 0
+        if has_fetched:
+            actual_ideal  = fetched_prev * (1 - M_CAL_DISCOUNT)
+            entry_ok      = entry_price <= actual_ideal * 1.001
+            discount_pct  = (fetched_prev - entry_price) / fetched_prev * 100
+        else:
+            entry_ok      = True
+            discount_pct  = 2.0   # by definition when derived
+
+        sym_display = symbol.strip().upper() or "—"
+        badge_cls   = "pill-live" if st.session_state.m_source == "live" else "pill-manual"
+        badge_text  = "🟢 LIVE" if st.session_state.m_source == "live" else "🟡 MANUAL"
+
+        st.markdown('<div class="section-label">M_Cal Results</div>', unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <span style="font-size:1.5rem;font-weight:800;color:#f0c040;letter-spacing:.04em;">{sym_display}</span>
+            <span class="source-pill {badge_cls}">{badge_text}</span>
+          </div>
+          <div class="big-block">
+            <div class="lbl">Shares to Buy</div>
+            <div class="num green">{shares:,}</div>
+            <div class="unit">@ ${entry_price:,.2f} entry &nbsp;·&nbsp; ${capital_used:,.2f} deployed</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        disc_color = "green" if discount_pct >= 1.8 else "orange" if discount_pct >= 0 else "red"
+        st.markdown(f"""
+        <div class="grid3">
+          <div class="mini">
+            <div class="lbl">Implied Prev Close</div>
+            <div class="val blue">${implied_prev:,.2f}</div>
+          </div>
+          <div class="mini">
+            <div class="lbl">Your Entry</div>
+            <div class="val gold">${entry_price:,.2f}</div>
+          </div>
+          <div class="mini">
+            <div class="lbl">Discount</div>
+            <div class="val {disc_color}">{discount_pct:+.2f}%</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # validation alert
+        if has_fetched:
+            if entry_ok:
+                diff = actual_ideal - entry_price
+                st.markdown(f"""
+                <div class="alert ok">
+                  ✅ Entry <strong>${entry_price:,.2f}</strong> is within the 2% threshold
+                  of actual prev close (${fetched_prev:,.2f}). You are
+                  <strong>${diff:,.2f} below</strong> the ideal entry of ${actual_ideal:,.2f}.
+                </div>""", unsafe_allow_html=True)
+            else:
+                overshoot = entry_price - actual_ideal
+                st.markdown(f"""
+                <div class="alert warn">
+                  ⚠️ Entry <strong>${entry_price:,.2f}</strong> exceeds the 2% discount target
+                  of <strong>${actual_ideal:,.2f}</strong> (from actual prev close ${fetched_prev:,.2f})
+                  by <strong>${overshoot:,.2f}</strong>.
+                  Consider waiting for a pullback.
+                </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="alert info">
+              ℹ️ Implied Prev Close: <strong>${implied_prev:,.2f}</strong>
+              (back-calculated as Entry ÷ 0.98).
+              Tap Fetch if online to validate against the actual prev close.
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown('<div class="section-label">Full Breakdown</div>', unsafe_allow_html=True)
+
+        def render_card(title, rows):
+            inner = "".join(
+                f'<div class="res-row">'
+                f'<span class="res-label">{lbl}</span>'
+                f'<span class="res-value {cls}">{val}</span>'
+                f'</div>'
+                for lbl, val, cls in rows
+            )
+            st.markdown(
+                f'<div class="card"><div class="card-title">{title}</div>{inner}</div>',
+                unsafe_allow_html=True,
+            )
+
+        price_rows = [
+            ("Your Entry Price",              f"${entry_price:,.2f}",  "gold"),
+            ("Implied Prev Close (÷ 0.98)",   f"${implied_prev:,.2f}", "blue"),
+        ]
+        if has_fetched:
+            price_rows += [
+                ("Actual Prev Close (fetched)", f"${fetched_prev:,.2f}",          "blue"),
+                ("Ideal Entry from Actual PC",  f"${fetched_prev*(1-M_CAL_DISCOUNT):,.2f}", "green" if entry_ok else "orange"),
+                ("Discount to Actual PC",       f"{discount_pct:+.2f}%",           "green" if discount_pct >= 2.0 else "orange"),
+            ]
+
+        render_card("💰 Price Levels", price_rows)
+        render_card("📐 Position Sizing (M_Cal)", [
+            ("Shares  [ROUNDDOWN(1250 ÷ Entry, 0)]", f"{shares:,}",            "gold"),
+            ("Capital Per Trade",                     f"${M_CAL_CAPITAL:,.0f}", ""),
+            ("Capital Deployed",                      f"${capital_used:,.2f}",  "blue"),
+            ("Unused Capital",                        f"${M_CAL_CAPITAL - capital_used:,.2f}", ""),
+        ])
+
+        with st.expander("📋 M_Cal Formula Reference", expanded=False):
+            st.markdown(f"""
+**Mode B — Know Entry Price, find Prev Close & Shares**
+```
+Implied Prev Close = Entry / 0.98
+                   = {entry_price:.2f} / 0.98
+                   = {implied_prev:.4f}
+
+Shares = ROUNDDOWN(1250 / Entry, 0)
+       = ROUNDDOWN(1250 / {entry_price:.2f}, 0)
+       = {shares}
+```
+            """)
+
+    else:
+        st.markdown("""
+        <div class="alert info">
+          <strong>Mode B:</strong> Enter the price you plan to buy at above.
+          M_Cal will back-calculate the implied previous day close and
+          calculate your share count automatically.
+        </div>
+        """, unsafe_allow_html=True)
 
 
 # ── footer ────────────────────────────────────────────────────────────────────
