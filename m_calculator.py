@@ -1,11 +1,7 @@
 """
 M_Cal — Trade Entry Calculator
 ================================
-Formulas extracted from M_Calculator.xlsx (UST_MRT2026 sheet)
 
-Strategy header (row 1):
-  MRT: Stock > 200D MA · lowest 10 days · enter 2% below prev day close
-       Russell 1000 stocks · exit RSI-2d above 50 · max 8 positions · 12.5% allocation
 
 Column H (Shares):  =ROUNDDOWN(1250 / Entry, 0)
   → Fixed capital of $1,250 per position, rounded DOWN to whole shares
